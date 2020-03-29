@@ -1,0 +1,7 @@
+# vim stuff
+*~
+Session.vim
+*.swp
+*.o
+build
+epnfcup
