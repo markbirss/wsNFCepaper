@@ -122,9 +122,17 @@ int sendcmd(nfc_device *pnd, uint8_t *capdu, uint8_t capdulen, uint8_t rb0, uint
 	}
 }
 
+void errorexit()
+{
+	nfc_close(pnd);
+	nfc_exit(context);
+	exit(EXIT_FAILURE);
+}
+
 int main(int argc, const char *argv[])
 {
-	uint8_t step=0;
+//	uint8_t step=0;
+
 	size_t rxsz = 20;
 	uint8_t rx[20];
 
@@ -221,109 +229,62 @@ int main(int argc, const char *argv[])
 	printf("String = [%s]\n", idextected);
 #endif
 
-	rx[0]=1; rx[1]=1;
+	printf("Step 0 : init ?\n");
+	if(sendcmd(pnd, step0, 2, 0, 0, 10, 0) != 0)
+		errorexit();
 
-	while(1) {
-		if(step==0) {
-			printf("Step 0 : init ?\n");
-			if(sendcmd(pnd, step0, 2, 0, 0, 10, 0) == 0)
-				step = 1;
-			else
-				step = 14;
-		} else if(step==1) {
-			printf("Step 1 : select e-paper type and reset\n");
-			if(sendcmd(pnd, step1, 3, 0, 0, 10, 0) == 0)
-				step = 2;
-			else
-				step = 14;
-			usleep(10*1000);
-		} else if(step==2) {
-			printf("Step 2 : e-paper normal mode\n");
-			if(sendcmd(pnd, step2, 2, 0, 0, 50, 0) == 0)
-				step = 3;
-			else
-				step = 14;
-			usleep(100*1000);
-		} else if(step==3) {
-			printf("Step 3 : e-paper config1\n");
-			if(sendcmd(pnd, step3, 2, 0, 0, 10, 0) == 0)
-				step = 4;
-			else
-				step = 14;
-			usleep(200*1000);
-		} else if(step==4) {
-			printf("Step 4 : e-paper power on\n");
-			if(sendcmd(pnd, step4, 2, 0, 0, 10, 0) == 0)
-				step = 5;
-			else
-				step = 14;
-			usleep(500*1000);
-		} else if(step==5) {
-			printf("Step 5 : e-paper config2\n");
-			if(sendcmd(pnd, step5, 2, 0, 0, 30, 0) == 0)
-				step = 6;
-			else
-				step = 14;
-			usleep(10*1000);
-		} else if(step==6) {
-			printf("Step 6 : EDP load to main\n");
-			if(sendcmd(pnd, step6, 2, 0, 0, 10, 0) == 0)
-				step = 7;
-			else
-				step = 14;
-		} else if(step==7) {
-			printf("Step 7 : Data preparation\n");
-			if(sendcmd(pnd, step7, 2, 0, 0, 10, 0) == 0)
-				step = 8;
-			else
-				step = 14;
-		} else if(step==8) {
-			printf("Step 8 : Data start command\n");
-			for(int i = 0; i<150; i++) {
-				rx[0]=1; rx[1]=1;
-				// FIXME step8 + data
-				CardTransmit(pnd, step8, 103, rx, &rxsz);
-			}
-			rx[0]=1; rx[1]=1;
-			step=9;
-		} else if(step==9) {
-			printf("Step 9 : e-paper power on\n");
-			if(sendcmd(pnd, step9, 2, 0, 0, 10, 0) == 0)
-				step = 10;
-			else
-				step = 14;
-		} else if(step==10) {
-			printf("Step 10 : Refresh e-paper\n");
-			if(sendcmd(pnd, step10, 2, 0, 0, 10, 0) == 0)
-				step = 11;
-			else
-				step = 14;
-			usleep(200*1000);
-		} else if(step==11) {
-			printf("Step 11 : wait for ready\n");
-			if(sendcmd(pnd, step11, 2, 0xff, 0, 70, 100) == 0)
-				step = 12;
-			else
-				step = 14;
-		} else if(step==12) {
-			printf("Step 12 : e-paper power off command\n");
-			if(sendcmd(pnd, step12, 2, 0, 0, 1, 0) == 0)
-				step = 13;
-			else
-				step = 14;
-			usleep(200*1000);
-		} else if(step==13) {
-			printf("Step 13\n");
-			step=14;
-			printf("E-paper UPdate OK\n");
-			usleep(200*1000);
-		} else if(step==14) {
-			printf("The End.\n");
-			break;
-		}
+	printf("Step 1 : select e-paper type and reset\n");
+	if(sendcmd(pnd, step1, 3, 0, 0, 10, 0) != 0)
+		errorexit();
+
+	printf("Step 2 : e-paper normal mode\n");
+	if(sendcmd(pnd, step2, 2, 0, 0, 50, 0) != 0)
+		errorexit();
+
+	printf("Step 3 : e-paper config1\n");
+	if(sendcmd(pnd, step3, 2, 0, 0, 10, 0) != 0)
+		errorexit();
+
+	printf("Step 4 : e-paper power on\n");
+	if(sendcmd(pnd, step4, 2, 0, 0, 10, 0) != 0)
+		errorexit();
+
+	printf("Step 5 : e-paper config2\n");
+	if(sendcmd(pnd, step5, 2, 0, 0, 30, 0) != 0)
+		errorexit();
+
+	printf("Step 6 : EDP load to main\n");
+	if(sendcmd(pnd, step6, 2, 0, 0, 10, 0) != 0)
+		errorexit();
+
+	printf("Step 7 : Data preparation\n");
+	if(sendcmd(pnd, step7, 2, 0, 0, 10, 0) != 0)
+		errorexit();
+
+	printf("Step 8 : Data start command\n");
+	for(int i = 0; i<150; i++) {
+		// FIXME step8 + data
+		CardTransmit(pnd, step8, 103, rx, &rxsz);
 	}
 
-	printf("NFC stop.\n");
+	printf("Step 9 : e-paper power on\n");
+	if(sendcmd(pnd, step9, 2, 0, 0, 10, 0) != 0)
+		errorexit();
+
+	printf("Step 10 : Refresh e-paper\n");
+	if(sendcmd(pnd, step10, 2, 0, 0, 10, 0) != 0)
+		errorexit();
+
+	printf("Step 11 : wait for ready\n");
+	if(sendcmd(pnd, step11, 2, 0xff, 0, 70, 100) != 0)
+		errorexit();
+
+	printf("Step 12 : e-paper power off command\n");
+	if(sendcmd(pnd, step12, 2, 0, 0, 1, 0) != 0)
+		errorexit();
+
+	printf("E-paper UPdate OK\n");
+
 	nfc_close(pnd);
 	nfc_exit(context);
 	exit(EXIT_SUCCESS);
