@@ -9,6 +9,14 @@
 
 #include <nfc/nfc.h>
 
+#define WIDTH   400
+#define HEIGHT  300
+#define BUFSIZE WIDTH*HEIGHT/8
+
+
+// ~/SRC/C/image/pix.c
+
+
 //#define DEBUG 1
 
 // https://www.waveshare.com/wiki/4.2inch_NFC-Powered_e-Paper
@@ -47,6 +55,9 @@ uint8_t step9[]  = { 0xcd, 0x18 };			// e-paper power on
 uint8_t step10[] = { 0xcd, 0x09 };			// Refresh e-paper
 uint8_t step11[] = { 0xcd, 0x0a };			// wait for ready
 uint8_t step12[] = { 0xcd, 0x04 };			// e-paper power off command
+
+uint8_t imgbuf[BUFSIZE] = { 0 };
+
 
 static void sighandler(int sig)
 {
@@ -122,6 +133,24 @@ int sendcmd(nfc_device *pnd, uint8_t *capdu, uint8_t capdulen, uint8_t rb0, uint
 	}
 }
 
+int sendimg(nfc_device *pnd)
+{
+	int i;
+	uint8_t rx[20];
+	size_t rxsz = sizeof(rx);
+	uint8_t segment[103] = { 0xcd, 0x08, 0x64 };
+
+	for(i = 0; i<150; i++) {
+		memcpy(segment+3, imgbuf+(i*100), 100);
+		CardTransmit(pnd, segment, 103, rx, &rxsz);
+		printf("Sending: %d %%\r", i*100/150);
+		fflush(stdout);
+	}
+	printf("\n");
+
+	return(0);
+}
+
 void errorexit()
 {
 	nfc_close(pnd);
@@ -131,12 +160,12 @@ void errorexit()
 
 int main(int argc, const char *argv[])
 {
-//	uint8_t step=0;
-
-	size_t rxsz = 20;
-	uint8_t rx[20];
-
 	nfc_target nt;
+
+	for(int i=0; i < BUFSIZE; i++) {
+		imgbuf[i] = 0xF0;
+		// imgbuf[i] = rand();
+	}
 
 	nfc_init(&context);
 	if (context == NULL) {
@@ -155,7 +184,6 @@ int main(int argc, const char *argv[])
 	}
 
 	const char *acLibnfcVersion = nfc_version();
-	(void)argc;
 	printf("%s uses libnfc %s\n", argv[0], acLibnfcVersion);
 
 	pnd = nfc_open(context, NULL);
@@ -262,10 +290,7 @@ int main(int argc, const char *argv[])
 		errorexit();
 
 	printf("Step 8 : Data start command\n");
-	for(int i = 0; i<150; i++) {
-		// FIXME step8 + data
-		CardTransmit(pnd, step8, 103, rx, &rxsz);
-	}
+	sendimg(pnd);
 
 	printf("Step 9 : e-paper power on\n");
 	if(sendcmd(pnd, step9, 2, 0, 0, 10, 0) != 0)
