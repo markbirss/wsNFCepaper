@@ -20,9 +20,6 @@
 // https://www.waveshare.com/wiki/ST25R3911B_NFC_Board
 // look at ST25R3911B-NFC-Demo/epd-demo/User/Browser/Browser.c ;)
 
-// Screen = 400*300 1 bit
-// (300*400)/8 = buffer 15000 bytes
-
 nfc_device *pnd;
 nfc_context *context;
 
@@ -154,15 +151,19 @@ int readimage(char *filename)
 {
 	unsigned long width, height;
 	unsigned long x, y;
+	double pixh, pixs, pixl;
 	int i = 0;
 	int j = 0;
 
 	MagickWand *mw = NULL;
 	PixelIterator *iterator = NULL;
 	PixelWand **pixels = NULL;
+	PixelWand *background;
 
 	MagickWandGenesis();
 	mw = NewMagickWand();
+	background=NewPixelWand();
+	PixelSetColor(background,"#ffffff");
 
 	printf("MagickWand: load file\n");
 	if(MagickReadImage(mw,filename) == MagickFalse) {
@@ -173,26 +174,33 @@ int readimage(char *filename)
 	width = MagickGetImageWidth(mw);
 	height = MagickGetImageHeight(mw);
 
-	// FIXME : resize only if wrong size
-
-	printf("MagickWand: resize\n");
-	if(MagickResizeImage(mw, WIDTH, HEIGHT, LanczosFilter,1) == MagickFalse) {
-		fprintf(stderr, "Error resizing image!\n");
-		return(-1);
+	if(height>width) {
+		printf("MagickWand: rotate\n");
+		if(MagickRotateImage(mw, background, 90) == MagickFalse) {
+			fprintf(stderr, "Error resizing image!\n");
+			return(-1);
+		}
 	}
 
-	// FIXME : convert only if not BW image
-
-	printf("MagickWand: posterize\n");
-	if(MagickPosterizeImage(mw, 4, FloydSteinbergDitherMethod) == MagickFalse) {
-		fprintf(stderr, "Error posterizing image!\n");
-		return(-1);
+	if(height != 300 || width != 400) {
+		printf("MagickWand: resize\n");
+		if(MagickResizeImage(mw, WIDTH, HEIGHT, LanczosFilter,1) == MagickFalse) {
+			fprintf(stderr, "Error resizing image!\n");
+			return(-1);
+		}
 	}
 
-	printf("MagickWand: set type to BW\n");
-	if(MagickSetImageType(mw, BilevelType) == MagickFalse) {
-		fprintf(stderr, "Error setting image to BW!\n");
-		return(-1);
+	if(MagickGetImageColors(mw) != 2) {
+		printf("MagickWand: posterize\n");
+		if(MagickPosterizeImage(mw, 4, FloydSteinbergDitherMethod) == MagickFalse) {
+			fprintf(stderr, "Error posterizing image!\n");
+			return(-1);
+		}
+		printf("MagickWand: set type to BW\n");
+		if(MagickSetImageType(mw, BilevelType) == MagickFalse) {
+			fprintf(stderr, "Error setting image to BW!\n");
+			return(-1);
+		}
 	}
 
 	width = MagickGetImageWidth(mw);
@@ -204,21 +212,24 @@ int readimage(char *filename)
 		// Get the next row of the image as an array of PixelWands
 		pixels=PixelGetNextIteratorRow(iterator,&width);
 		for(x=0; x < width; x++) {
-			if(PixelGetBlack(pixels[x])!=0)  // '1' is white on e-paper
+			PixelGetHSL(pixels[x], &pixh, &pixs, &pixl);
+			if(pixl > 0)	// '1' is white on e-paper
 				imgbuf[j] |= (128 >> (i-(j*8))); // reversed bits order
 			i++;
 			if(i%8 == 0) j++;
 		}
 	}
 
+	DestroyPixelWand(background);
 	if(mw) mw = DestroyMagickWand(mw);
 	MagickWandTerminus();
 
 	return(0);
 }
 
-void errorexit()
+void errorexit(char *msg)
 {
+	fprintf(stderr, "ERROR: %s\n", msg);
 	nfc_close(pnd);
 	nfc_exit(context);
 	exit(EXIT_FAILURE);
@@ -285,11 +296,6 @@ int main(int argc, char** argv)
 		return(EXIT_FAILURE);
 	}
 
-	/*
-	const char *acLibnfcVersion = nfc_version();
-	printf("%s uses libnfc %s\n", argv[0], acLibnfcVersion);
-	*/
-
 	pnd = nfc_open(context, NULL);
 	if (pnd == NULL) {
 		fprintf(stderr, "Error: %s\n", "Unable to open NFC device.");
@@ -311,7 +317,6 @@ int main(int argc, char** argv)
 	};
 
 	nfc_initiator_list_passive_targets(pnd,nmMifare,ant,1);
-	//printf("%s\n",nfc_strerror(pnd)); // print Success
 
 	// Drop the field for a while
     nfc_device_set_property_bool(pnd, NP_ACTIVATE_FIELD, false);
@@ -363,54 +368,61 @@ int main(int argc, char** argv)
 
 	printf("Step 0 : init ?\n");
 	if(sendcmd(pnd, step0, 2, 0, 0, 10, 0) != 0)
-		errorexit();
+		errorexit("init failed!");
+	usleep(200*1000);
 
 	printf("Step 1 : select e-paper type and reset\n");
 	if(sendcmd(pnd, step1, 3, 0, 0, 10, 0) != 0)
-		errorexit();
+		errorexit("reset failed!");
+	usleep(10*1000);
 
 	printf("Step 2 : e-paper normal mode\n");
 	if(sendcmd(pnd, step2, 2, 0, 0, 50, 0) != 0)
-		errorexit();
+		errorexit("mode failed!");
+	usleep(100*1000);
 
 	printf("Step 3 : e-paper config1\n");
 	if(sendcmd(pnd, step3, 2, 0, 0, 10, 0) != 0)
-		errorexit();
+		errorexit("config1 failed!");
+	usleep(200*1000);
 
 	printf("Step 4 : e-paper power on\n");
 	if(sendcmd(pnd, step4, 2, 0, 0, 10, 0) != 0)
-		errorexit();
+		errorexit("power on failed!");
+	usleep(500*1000);
 
 	printf("Step 5 : e-paper config2\n");
 	if(sendcmd(pnd, step5, 2, 0, 0, 30, 0) != 0)
-		errorexit();
+		errorexit("config2 failed!");
+	usleep(10*1000);
 
 	printf("Step 6 : EDP load to main\n");
 	if(sendcmd(pnd, step6, 2, 0, 0, 10, 0) != 0)
-		errorexit();
+		errorexit("EDP load failed!");
 
 	printf("Step 7 : Data preparation\n");
 	if(sendcmd(pnd, step7, 2, 0, 0, 10, 0) != 0)
-		errorexit();
+		errorexit("data preparation failed!");
 
 	printf("Step 8 : Data start command\n");
 	sendimg(pnd);
 
 	printf("Step 9 : e-paper power on\n");
 	if(sendcmd(pnd, step9, 2, 0, 0, 10, 0) != 0)
-		errorexit();
+		errorexit("power on failed!");
 
 	printf("Step 10 : Refresh e-paper\n");
 	if(sendcmd(pnd, step10, 2, 0, 0, 10, 0) != 0)
-		errorexit();
+		errorexit("refresh failed!");
+	usleep(200*1000);
 
 	printf("Step 11 : wait for ready\n");
 	if(sendcmd(pnd, step11, 2, 0xff, 0, 70, 100) != 0)
-		errorexit();
+		errorexit("wait for ready failed!");
 
 	printf("Step 12 : e-paper power off command\n");
 	if(sendcmd(pnd, step12, 2, 0, 0, 1, 0) != 0)
-		errorexit();
+		errorexit("power off failed!");
 
 	printf("E-paper UPdate OK\n");
 
