@@ -8,14 +8,11 @@
 #include <signal.h>
 
 #include <nfc/nfc.h>
+#include <wand/magick_wand.h>
 
 #define WIDTH   400
 #define HEIGHT  300
 #define BUFSIZE WIDTH*HEIGHT/8
-
-
-// ~/SRC/C/image/pix.c
-
 
 //#define DEBUG 1
 
@@ -57,6 +54,8 @@ uint8_t step11[] = { 0xcd, 0x0a };			// wait for ready
 uint8_t step12[] = { 0xcd, 0x04 };			// e-paper power off command
 
 uint8_t imgbuf[BUFSIZE] = { 0 };
+
+char *rfilename = NULL;
 
 
 static void sighandler(int sig)
@@ -143,10 +142,77 @@ int sendimg(nfc_device *pnd)
 	for(i = 0; i<150; i++) {
 		memcpy(segment+3, imgbuf+(i*100), 100);
 		CardTransmit(pnd, segment, 103, rx, &rxsz);
-		printf("Sending: %d %%\r", i*100/150);
+		printf("Sending: %d %%\r", (i+1)*100/150);
 		fflush(stdout);
 	}
 	printf("\n");
+
+	return(0);
+}
+
+int readimage(char *filename)
+{
+	unsigned long width, height;
+	unsigned long x, y;
+	int i = 0;
+	int j = 0;
+
+	MagickWand *mw = NULL;
+	PixelIterator *iterator = NULL;
+	PixelWand **pixels = NULL;
+
+	MagickWandGenesis();
+	mw = NewMagickWand();
+
+	printf("MagickWand: load file\n");
+	if(MagickReadImage(mw,filename) == MagickFalse) {
+		fprintf(stderr, "Error loading image file!\n");
+		return(-1);
+	}
+
+	width = MagickGetImageWidth(mw);
+	height = MagickGetImageHeight(mw);
+
+	// FIXME : resize only if wrong size
+
+	printf("MagickWand: resize\n");
+	if(MagickResizeImage(mw, WIDTH, HEIGHT, LanczosFilter,1) == MagickFalse) {
+		fprintf(stderr, "Error resizing image!\n");
+		return(-1);
+	}
+
+	// FIXME : convert only if not BW image
+
+	printf("MagickWand: posterize\n");
+	if(MagickPosterizeImage(mw, 4, FloydSteinbergDitherMethod) == MagickFalse) {
+		fprintf(stderr, "Error posterizing image!\n");
+		return(-1);
+	}
+
+	printf("MagickWand: set type to BW\n");
+	if(MagickSetImageType(mw, BilevelType) == MagickFalse) {
+		fprintf(stderr, "Error setting image to BW!\n");
+		return(-1);
+	}
+
+	width = MagickGetImageWidth(mw);
+	height = MagickGetImageHeight(mw);
+
+	// Get a new pixel iterator
+	iterator=NewPixelIterator(mw);
+	for(y=0; y < height; y++) {
+		// Get the next row of the image as an array of PixelWands
+		pixels=PixelGetNextIteratorRow(iterator,&width);
+		for(x=0; x < width; x++) {
+			if(PixelGetBlack(pixels[x])!=0)  // '1' is white on e-paper
+				imgbuf[j] |= (128 >> (i-(j*8))); // reversed bits order
+			i++;
+			if(i%8 == 0) j++;
+		}
+	}
+
+	if(mw) mw = DestroyMagickWand(mw);
+	MagickWandTerminus();
 
 	return(0);
 }
@@ -158,13 +224,49 @@ void errorexit()
 	exit(EXIT_FAILURE);
 }
 
-int main(int argc, const char *argv[])
+void printhelp(char *binname)
 {
+	printf("Waveshare 4.2\" NFC e-Paper tool/updater v0.0.1\n");
+	printf("Copyright (c) 2020 - 0xDRRB\n\n");
+	printf("Usage : %s [OPTIONS]\n", binname);
+	printf(" -f FILE         update with image in FILE\n");
+	printf(" -v              verbose mode\n");
+	printf(" -h              show this help\n");
+}
+
+int main(int argc, char** argv)
+{
+	int retopt;
+	int opt = 0;
+
 	nfc_target nt;
 
-	for(int i=0; i < BUFSIZE; i++) {
-		imgbuf[i] = 0xF0;
-		// imgbuf[i] = rand();
+	while ((retopt = getopt(argc, argv, "f:vh")) != -1) {
+		switch (retopt) {
+			case 'f':
+				rfilename = strdup(optarg);
+				opt++;
+				break;
+			case 'h':
+				printhelp(argv[0]);
+				return(EXIT_SUCCESS);
+			case 'v':
+				opt++;
+				break;
+			default:
+				printhelp(argv[0]);
+				return(EXIT_FAILURE);
+		}
+	}
+
+	if(!rfilename) {
+		printhelp(argv[0]);
+		exit(EXIT_FAILURE);
+	}
+
+	if(readimage(rfilename) != 0) {
+		fprintf(stderr, "Error: Unable to use image file!\n");
+		exit(EXIT_FAILURE);
 	}
 
 	nfc_init(&context);
@@ -183,8 +285,10 @@ int main(int argc, const char *argv[])
 		return(EXIT_FAILURE);
 	}
 
+	/*
 	const char *acLibnfcVersion = nfc_version();
 	printf("%s uses libnfc %s\n", argv[0], acLibnfcVersion);
+	*/
 
 	pnd = nfc_open(context, NULL);
 	if (pnd == NULL) {
@@ -207,7 +311,7 @@ int main(int argc, const char *argv[])
 	};
 
 	nfc_initiator_list_passive_targets(pnd,nmMifare,ant,1);
-	printf("%s\n",nfc_strerror(pnd)); // print Success
+	//printf("%s\n",nfc_strerror(pnd)); // print Success
 
 	// Drop the field for a while
     nfc_device_set_property_bool(pnd, NP_ACTIVATE_FIELD, false);

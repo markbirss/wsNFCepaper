@@ -3,5 +3,7 @@
 Session.vim
 *.swp
 *.o
+*.jpg
+*.png
 build
 epnfcup
