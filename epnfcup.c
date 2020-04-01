@@ -24,7 +24,7 @@ nfc_device *pnd;
 nfc_context *context;
 
 uint8_t idfromscreen[48];
-uint8_t idextected[48] = {
+uint8_t idexpected[48] = {
 	0x03, 0x27, 0xd4, 0x0f, 0x15, 0x61, 0x6e, 0x64, 0x72, 0x6f, 0x69, 0x64, 0x2e, 0x63, 0x6f, 0x6d,
 	0x3a, 0x70, 0x6b, 0x67, 0x77, 0x61, 0x76, 0x65, 0x73, 0x68, 0x61, 0x72, 0x65, 0x2e, 0x66, 0x65,
 	0x6e, 0x67, 0x2e, 0x6e, 0x66, 0x63, 0x74, 0x61, 0x67, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
@@ -252,6 +252,12 @@ int main(int argc, char** argv)
 
 	nfc_target nt;
 
+	const nfc_modulation nmMifare = {
+		.nmt = NMT_ISO14443A,
+		.nbr = NBR_UNDEFINED, //NBR_106,
+	};
+
+
 	while ((retopt = getopt(argc, argv, "f:vh")) != -1) {
 		switch (retopt) {
 			case 'f':
@@ -310,14 +316,6 @@ int main(int argc, char** argv)
 
 	printf("NFC reader: %s opened\n", nfc_device_get_name(pnd));
 
-	nfc_target ant[1];
-	const nfc_modulation nmMifare = {
-		.nmt = NMT_ISO14443A,
-		.nbr = NBR_UNDEFINED, //NBR_106,
-	};
-
-	nfc_initiator_list_passive_targets(pnd,nmMifare,ant,1);
-
 	// Drop the field for a while
     nfc_device_set_property_bool(pnd, NP_ACTIVATE_FIELD, false);
 	usleep(200*1000);
@@ -355,7 +353,7 @@ int main(int argc, char** argv)
 	memcpy(idfromscreen+32, resp, 16);
 	usleep(100*1000);
 
-	if(memcmp(idextected, idfromscreen, 48) != 0) {
+	if(memcmp(idexpected, idfromscreen, 48) != 0) {
 		fprintf(stderr, "Wrong tag!\n");
 		nfc_close(pnd);
 		nfc_exit(context);
@@ -363,7 +361,7 @@ int main(int argc, char** argv)
 	}
 
 #if DEBUG
-	printf("String = [%s]\n", idextected);
+	printf("String = [%s]\n", idexpected);
 #endif
 
 	printf("Step 0 : init ?\n");
