@@ -1,7 +1,7 @@
 TARGET  := epnfcup
 WARN    := -Wall
 CFLAGS  := -O2 ${WARN} `pkg-config --cflags libnfc MagickWand`
-LDFLAGS := `pkg-config --libs libnfc MagickWand` -lfreefare
+LDFLAGS := `pkg-config --libs libnfc MagickWand`
 CC      := gcc
 
 C_SRCS    = $(wildcard *.c)
