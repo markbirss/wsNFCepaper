@@ -40,7 +40,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define WIDTH   400
 #define HEIGHT  300
-#define BUFSIZE WIDTH*HEIGHT/8
+#define BUFSIZE (WIDTH*HEIGHT)/8
+#define SLICESZ 100		// for 4.2 inch
 
 //#define DEBUG 1
 
@@ -58,25 +59,25 @@ uint8_t idexpected[48] = {
 	0x6e, 0x67, 0x2e, 0x6e, 0x66, 0x63, 0x74, 0x61, 0x67, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-uint8_t step0[]  = { 0xcd, 0x0d };			// ??
-uint8_t step1[]  = { 0xcd, 0x00, 0x0a };	// select e-paper type and reset e-paper	4  : 2.13inch e-Paper
-											//											7  : 2.9inch e-Paper
-											//											10 : 4.2inch e-Paper
-											//											14 : 7.5inch e-Paper
-uint8_t step2[]  = { 0xcd, 0x01 };			// e-paper normal mode  type?
-uint8_t step3[]  = { 0xcd, 0x02 };			// e-paper config1
-uint8_t step4[]  = { 0xcd, 0x03 };			// e-paper power on
-uint8_t step5[]  = { 0xcd, 0x05 };			// e-paper config2
-uint8_t step6[]  = { 0xcd, 0x06 };			// EDP load to main
-uint8_t step7[]  = { 0xcd, 0x07 };			// Data preparation
-uint8_t step8[123]  = { 0xcd, 0x08, 0x64 };	// Data start command	2.13 inch(0x10:Send 16 data at a time)
-											//						2.9  inch(0x10:Send 16 data at a time)
-											//						4.2  inch(0x64:Send 100 data at a time)
-											//						7.5  inch(0x78:Send 120 data at a time)
-uint8_t step9[]  = { 0xcd, 0x18 };			// e-paper power on
-uint8_t step10[] = { 0xcd, 0x09 };			// Refresh e-paper
-uint8_t step11[] = { 0xcd, 0x0a };			// wait for ready
-uint8_t step12[] = { 0xcd, 0x04 };			// e-paper power off command
+uint8_t step0[]  = { 0xcd, 0x0d };				// ??
+uint8_t step1[]  = { 0xcd, 0x00, 0x0a };		// select e-paper type and reset e-paper	4  : 2.13inch e-Paper
+												//											7  : 2.9inch e-Paper
+												//											10 : 4.2inch e-Paper
+												//											14 : 7.5inch e-Paper
+uint8_t step2[]  = { 0xcd, 0x01 };				// e-paper normal mode  type?
+uint8_t step3[]  = { 0xcd, 0x02 };				// e-paper config1
+uint8_t step4[]  = { 0xcd, 0x03 };				// e-paper power on
+uint8_t step5[]  = { 0xcd, 0x05 };				// e-paper config2
+uint8_t step6[]  = { 0xcd, 0x06 };				// EDP load to main
+uint8_t step7[]  = { 0xcd, 0x07 };				// Data preparation
+uint8_t step8[123]  = { 0xcd, 0x08, SLICESZ };	// Data start command	2.13 inch(0x10:Send 16 data at a time)
+												//						2.9  inch(0x10:Send 16 data at a time)
+												//						4.2  inch(0x64:Send 100 data at a time)
+												//						7.5  inch(0x78:Send 120 data at a time)
+uint8_t step9[]  = { 0xcd, 0x18 };				// e-paper power on
+uint8_t step10[] = { 0xcd, 0x09 };				// Refresh e-paper
+uint8_t step11[] = { 0xcd, 0x0a };				// wait for ready
+uint8_t step12[] = { 0xcd, 0x04 };				// e-paper power off command
 
 uint8_t imgbuf[BUFSIZE] = { 0 };
 
@@ -162,12 +163,12 @@ int sendimg(nfc_device *pnd)
 	int i;
 	uint8_t rx[20];
 	size_t rxsz = sizeof(rx);
-	uint8_t segment[103] = { 0xcd, 0x08, 0x64 };
+	uint8_t segment[SLICESZ+3] = { 0xcd, 0x08, 0x64 };
 
-	for(i = 0; i<150; i++) {
-		memcpy(segment+3, imgbuf+(i*100), 100);
-		CardTransmit(pnd, segment, 103, rx, &rxsz);
-		printf("Sending: %d %%\r", (i+1)*100/150);
+	for(i = 0; i<(BUFSIZE/SLICESZ); i++) {
+		memcpy(segment+3, imgbuf+(i*SLICESZ), SLICESZ);
+		CardTransmit(pnd, segment, sizeof(segment), rx, &rxsz);
+		printf("Sending: %d %%\r", (i+1)*100/(BUFSIZE/SLICESZ));
 		fflush(stdout);
 	}
 	printf("\n");
@@ -393,61 +394,61 @@ int main(int argc, char** argv)
 #endif
 
 	printf("Step 0 : init ?\n");
-	if(sendcmd(pnd, step0, 2, 0, 0, 10, 0) != 0)
+	if(sendcmd(pnd, step0, sizeof(step0), 0, 0, 10, 0) != 0)
 		errorexit("init failed!");
 	usleep(200*1000);
 
 	printf("Step 1 : select e-paper type and reset\n");
-	if(sendcmd(pnd, step1, 3, 0, 0, 10, 0) != 0)
+	if(sendcmd(pnd, step1, sizeof(step1), 0, 0, 10, 0) != 0)
 		errorexit("reset failed!");
 	usleep(10*1000);
 
 	printf("Step 2 : e-paper normal mode\n");
-	if(sendcmd(pnd, step2, 2, 0, 0, 50, 0) != 0)
+	if(sendcmd(pnd, step2, sizeof(step2), 0, 0, 50, 0) != 0)
 		errorexit("mode failed!");
 	usleep(100*1000);
 
 	printf("Step 3 : e-paper config1\n");
-	if(sendcmd(pnd, step3, 2, 0, 0, 10, 0) != 0)
+	if(sendcmd(pnd, step3, sizeof(step3), 0, 0, 10, 0) != 0)
 		errorexit("config1 failed!");
 	usleep(200*1000);
 
 	printf("Step 4 : e-paper power on\n");
-	if(sendcmd(pnd, step4, 2, 0, 0, 10, 0) != 0)
+	if(sendcmd(pnd, step4, sizeof(step4), 0, 0, 10, 0) != 0)
 		errorexit("power on failed!");
 	usleep(500*1000);
 
 	printf("Step 5 : e-paper config2\n");
-	if(sendcmd(pnd, step5, 2, 0, 0, 30, 0) != 0)
+	if(sendcmd(pnd, step5, sizeof(step5), 0, 0, 30, 0) != 0)
 		errorexit("config2 failed!");
 	usleep(10*1000);
 
 	printf("Step 6 : EDP load to main\n");
-	if(sendcmd(pnd, step6, 2, 0, 0, 10, 0) != 0)
+	if(sendcmd(pnd, step6, sizeof(step6), 0, 0, 10, 0) != 0)
 		errorexit("EDP load failed!");
 
 	printf("Step 7 : Data preparation\n");
-	if(sendcmd(pnd, step7, 2, 0, 0, 10, 0) != 0)
+	if(sendcmd(pnd, step7, sizeof(step7), 0, 0, 10, 0) != 0)
 		errorexit("data preparation failed!");
 
 	printf("Step 8 : Data start command\n");
 	sendimg(pnd);
 
 	printf("Step 9 : e-paper power on\n");
-	if(sendcmd(pnd, step9, 2, 0, 0, 10, 0) != 0)
+	if(sendcmd(pnd, step9, sizeof(step9), 0, 0, 10, 0) != 0)
 		errorexit("power on failed!");
 
 	printf("Step 10 : Refresh e-paper\n");
-	if(sendcmd(pnd, step10, 2, 0, 0, 10, 0) != 0)
+	if(sendcmd(pnd, step10, sizeof(step10), 0, 0, 10, 0) != 0)
 		errorexit("refresh failed!");
 	usleep(200*1000);
 
 	printf("Step 11 : wait for ready\n");
-	if(sendcmd(pnd, step11, 2, 0xff, 0, 70, 100) != 0)
+	if(sendcmd(pnd, step11, sizeof(step11), 0xff, 0, 70, 100) != 0)
 		errorexit("wait for ready failed!");
 
 	printf("Step 12 : e-paper power off command\n");
-	if(sendcmd(pnd, step12, 2, 0, 0, 1, 0) != 0)
+	if(sendcmd(pnd, step12, sizeof(step12), 0, 0, 1, 0) != 0)
 		errorexit("power off failed!");
 
 	printf("E-paper UPdate OK\n");
